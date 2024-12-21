@@ -21,7 +21,6 @@ This script is adapted from the work by winners of the CNC 2022 Subtask 2 @ CASE
 Original Repository: https://github.com/Gzhang-umich/1CademyTeamOfCASE
 Main Script to Refer to: "run_st2_v2.py"
 """
-
 import re
 import copy
 import argparse
