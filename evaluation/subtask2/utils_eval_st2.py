@@ -241,10 +241,10 @@ def main(ref_df, pred_list, calculate_best_combi=True):
                 )
 
     result = format_results(metric)
-    # multi_result = format_results(multi_metric)
+    multi_result = format_results(multi_metric)
 
-    # return result, multi_result
-    return result, result
+    return result, multi_result
+    
     
 
 def keep_relevant_rows_and_unstack(ref_df, predictions):
