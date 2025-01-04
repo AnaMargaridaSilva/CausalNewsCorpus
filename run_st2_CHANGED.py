@@ -1249,14 +1249,14 @@ def main():
             with open(f"{output_dir}/predictions.txt", "w") as f:
                 for row in truth.iterrows():
                     answers = eval(row[1]["causal_text_w_pairs"])
-                    if len(answers) > 0:
-                        f.write("Answers:\n")
-                        for i, answer in enumerate(answers):
-                            f.write(f"{i}. {answer}\n")
-                        f.write("\n")
-                        f.write("Prediction:\n")
-                        f.write(f"{predictions[row[0]]}\n")
-                        f.write("===============================\n")
+                    # if len(answers) > 0:
+                    f.write("Answers:\n")
+                    for i, answer in enumerate(answers):
+                        f.write(f"{i}. {answer}\n")
+                    f.write("\n")
+                    f.write("Prediction:\n")
+                    f.write(f"{predictions[row[0]]}\n")
+                    f.write("===============================\n")
             
             # export result of every epoch to the file
             with open(f"{output_dir}/submission.json", "w") as f:
