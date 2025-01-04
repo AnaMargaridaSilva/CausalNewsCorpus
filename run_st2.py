@@ -1238,6 +1238,8 @@ def main():
                 output_dir = os.path.join(args.output_dir, output_dir)
             accelerator.save_state(output_dir)
 
+            ### alterei a parte a seguir: 
+
             with open(f"{output_dir}/predictions.txt", "w") as f:
                 for row in truth.iterrows():
                     # Safely evaluate causal_text_w_pairs
@@ -1262,6 +1264,8 @@ def main():
                     f.write("===============================\n")
 
             print(f"Predictions saved to {output_dir}/predictions.txt")
+
+            # ALTEREI ATÉ AQUI
             
             # export result of every epoch to the file
             with open(f"{output_dir}/submission.json", "w") as f:
