@@ -1240,15 +1240,28 @@ def main():
 
             with open(f"{output_dir}/predictions.txt", "w") as f:
                 for row in truth.iterrows():
-                    answers = eval(row[1]["causal_text_w_pairs"])
-                    # if len(answers) > 0:
+                    # Safely evaluate causal_text_w_pairs
+                    try:
+                        answers = ast.literal_eval(row[1]["causal_text_w_pairs"])
+                    except (ValueError, SyntaxError) as e:
+                        print(f"Error parsing causal_text_w_pairs for row {row[0]}: {e}")
+                        answers = []
+
+                    # Write Answers section, even if it's empty
                     f.write("Answers:\n")
-                    for i, answer in enumerate(answers):
-                        f.write(f"{i}. {answer}\n")
-                    f.write("\n")
-                    f.write("Prediction:\n")
-                    f.write(f"{predictions[row[0]]}\n")
+                    if answers:  # Write each answer if available
+                        for i, answer in enumerate(answers):
+                            f.write(f"{i}. {answer}\n")
+                    else:
+                        f.write("No answers available.\n")
+
+                    # Always write the prediction
+                    prediction = predictions.get(row[0], "No prediction available")
+                    f.write("\nPrediction:\n")
+                    f.write(f"{prediction}\n")
                     f.write("===============================\n")
+
+            print(f"Predictions saved to {output_dir}/predictions.txt")
             
             # export result of every epoch to the file
             with open(f"{output_dir}/submission.json", "w") as f:
