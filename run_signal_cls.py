@@ -46,6 +46,7 @@ from transformers import (
 
 from datasets import DatasetDict
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_recall_fscore_support
 
 from transformers.utils import get_full_repo_name
 
@@ -525,6 +526,17 @@ def main():
         # eval_metric = metric.compute()
         eval_metric = accuracy_score(all_references, all_predictions)
         logger.info(f"epoch {epoch}: {eval_metric}")
+
+        precision, recall, f1, support = precision_recall_fscore_support(
+            all_references, 
+            all_predictions, 
+            average=None  # Metrics for each class separately
+            )
+
+        print(f"{'Label':<10}{'Support':<10}{'Precision':<10}{'Recall':<10}{'F1 Score':<10}")
+        print("-" * 50)
+        for i, label in enumerate(["0", "1"]):  
+            print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
 
         if args.with_tracking:
             accelerator.log(
