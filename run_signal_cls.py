@@ -525,7 +525,7 @@ def main():
 
         # eval_metric = metric.compute()
         eval_metric = accuracy_score(all_references, all_predictions)
-        logger.info(f"epoch {epoch}: {eval_metric}")
+        logger.info(f" Accuracy of epoch {epoch}: {eval_metric}")
 
         precision, recall, f1, support = precision_recall_fscore_support(
             all_references, 
