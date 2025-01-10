@@ -515,6 +515,8 @@ def main():
 
         all_predictions = []
         all_references = []
+        input_texts = []
+        
         for step, batch in enumerate(eval_dataloader):
             with torch.no_grad():
                 outputs = model(**batch)
