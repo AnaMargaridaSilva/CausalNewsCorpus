@@ -468,12 +468,9 @@ def main():
             resume_step -= starting_epoch * len(train_dataloader)
 
 
-    results_csv_file = os.path.join(args.output_dir, "results.csv")
-    if accelerator.is_main_process:
-        # Initialize the CSV file with a header row
-        with open(results_csv_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Sentence", "True_Label", "Prediction"])
+    
+    results_dir = os.path.join(args.output_dir, "epoch_results")
+    os.makedirs(results_dir, exist_ok=True)  # Ensure the directory exists
 
 
     for epoch in range(starting_epoch, args.num_train_epochs):
@@ -516,6 +513,13 @@ def main():
         all_predictions = []
         all_references = []
         input_texts = []
+
+        results_csv_file = os.path.join(results_dir, f"results_epoch_{epoch + 1}.csv")
+        if accelerator.is_main_process:
+            # Initialize the CSV file with a header row
+            with open(results_csv_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Sentence", "True_Label", "Prediction"])
         
         for step, batch in enumerate(eval_dataloader):
             with torch.no_grad():
