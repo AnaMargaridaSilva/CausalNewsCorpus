@@ -50,6 +50,8 @@ from sklearn.metrics import precision_recall_fscore_support
 
 from transformers.utils import get_full_repo_name
 
+import csv
+
 logger = get_logger(__name__)
 # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text-classification/requirements.txt")
 
@@ -465,6 +467,15 @@ def main():
             starting_epoch = resume_step // len(train_dataloader)
             resume_step -= starting_epoch * len(train_dataloader)
 
+
+    results_csv_file = os.path.join(args.output_dir, "results.csv")
+    if accelerator.is_main_process:
+        # Initialize the CSV file with a header row
+        with open(results_csv_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Sentence", "True_Label", "Prediction"])
+
+
     for epoch in range(starting_epoch, args.num_train_epochs):
         model.train()
         if args.with_tracking:
@@ -509,6 +520,10 @@ def main():
                 outputs = model(**batch)
             predictions = outputs.logits.argmax(dim=-1)
             predictions, references = accelerator.gather((predictions, batch["labels"]))
+            
+            input_sentences = accelerator.gather(batch["input_ids"])  # Gather tokenized inputs
+            input_texts.extend(tokenizer.batch_decode(input_sentences, skip_special_tokens=True))  # Decode text
+            
             # If we are in a multiprocess environment, the last batch has duplicates
             if accelerator.num_processes > 1:
                 if step == len(eval_dataloader) - 1:
@@ -516,12 +531,20 @@ def main():
                     references = references[: len(eval_dataloader.dataset) - samples_seen]
                 else:
                     samples_seen += references.shape[0]
+            
             all_predictions.extend([_.item() for _ in predictions])
             all_references.extend([_.item() for _ in references])
             # metric.add_batch(
             #     predictions=predictions,
             #     references=references,
             # )
+
+        # Write the results to the CSV file
+        if accelerator.is_main_process:
+            with open(results_csv_file, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for text, ref, pred in zip(input_texts, all_references, all_predictions):
+                    writer.writerow([text, ref, pred])
 
         # eval_metric = metric.compute()
         eval_metric = accuracy_score(all_references, all_predictions)
