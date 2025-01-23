@@ -51,6 +51,8 @@ from sklearn.metrics import precision_recall_fscore_support
 from transformers.utils import get_full_repo_name
 
 import csv
+import pandas as pd
+import numpy as np
 
 logger = get_logger(__name__)
 # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text-classification/requirements.txt")
