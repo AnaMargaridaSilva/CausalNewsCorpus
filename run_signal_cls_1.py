@@ -12,7 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" Finetuning a 🤗 Transformers model for sequence classification on GLUE."""
+
+""" Finetuning a 🤗 Transformers model for Signal Detection - Binary Classification."""
+
 import argparse
 import json
 import logging
@@ -57,17 +59,6 @@ import numpy as np
 logger = get_logger(__name__)
 # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text-classification/requirements.txt")
 
-task_to_keys = {
-    "cola": ("sentence", None),
-    "mnli": ("premise", "hypothesis"),
-    "mrpc": ("sentence1", "sentence2"),
-    "qnli": ("question", "sentence"),
-    "qqp": ("question1", "question2"),
-    "rte": ("sentence1", "sentence2"),
-    "sst2": ("sentence", None),
-    "stsb": ("sentence1", "sentence2"),
-    "wnli": ("sentence1", "sentence2"),
-}
 
 def set_seed(seed=1029):
     random.seed(seed)
@@ -81,14 +72,8 @@ def set_seed(seed=1029):
     torch.backends.cudnn.enabled = False
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Finetune a transformers model on a text classification task")
-    parser.add_argument(
-        "--task_name",
-        type=str,
-        default=None,
-        help="The name of the glue task to train on.",
-        choices=list(task_to_keys.keys()),
-    )
+    parser = argparse.ArgumentParser(description="Finetune a transformers model for Signal Detection")
+    
     parser.add_argument(
         "--train_file", type=str, default=None, help="A csv or a json file containing the training data."
     )
@@ -164,6 +149,7 @@ def parse_args():
     )
     parser.add_argument("--output_dir", type=str, default=42, help="Where to store the final model.")
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
+    
     parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument(
         "--hub_model_id", type=str, help="The name of the repository to keep in sync with the local `output_dir`."
@@ -204,8 +190,9 @@ def parse_args():
     args = parser.parse_args()
 
     # Sanity checks
-    if args.task_name is None and args.train_file is None and args.validation_file is None:
-        raise ValueError("Need either a task name or a training/validation file.")
+    if args.train_file is None and args.validation_file is None:
+        raise ValueError("Need a training or a validation file.")
+        
     else:
         if args.train_file is not None:
             extension = args.train_file.split(".")[-1]
@@ -222,6 +209,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
     # send_example_telemetry("run_glue_no_trainer", args)
@@ -229,9 +217,11 @@ def main():
     # Initialize the accelerator. We will let the accelerator handle device placement for us in this example.
     # If we're using tracking, we also need to initialize it here and it will by default pick up all supported trackers
     # in the environment
+    
     accelerator = (
         Accelerator(log_with=args.report_to, logging_dir=args.output_dir) if args.with_tracking else Accelerator()
     )
+    
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -268,8 +258,7 @@ def main():
             os.makedirs(args.output_dir, exist_ok=True)
     accelerator.wait_for_everyone()
 
-    # Get the datasets: you can either provide your own CSV/JSON training and evaluation files (see below)
-    # or specify a GLUE benchmark task (the dataset will be downloaded automatically from the datasets Hub).
+   
 
     # For CSV/JSON files, this script will use as labels the column called 'label' and as pair of sentences the
     # sentences in columns called 'sentence1' and 'sentence2' if such column exists or the first two columns not named
@@ -280,25 +269,15 @@ def main():
 
     # In distributed training, the load_dataset function guarantee that only one local process can concurrently
     # download the dataset.
-    if args.task_name is not None:
-        # Downloading and loading a dataset from the hub.
-        raw_datasets = load_dataset(args.task_name, args.dataset_config_name)
-    else:
-        data_files = {}
-        if args.train_file is not None:
-            data_files["train"] = args.train_file
-        if args.validation_file is not None:
-            data_files["validation"] = args.validation_file
-        extension = args.train_file.split(".")[-1]
-        if "validation" not in data_files:
-            raw_datasets = load_dataset(extension, data_files=data_files)['train'].train_test_split(300, shuffle=False)
-            raw_datasets = {'train': raw_datasets['train'], 'validation': raw_datasets['test']}
-            raw_datasets = DatasetDict(raw_datasets)
-        else:
-            raw_datasets = load_dataset(extension, data_files=data_files)
-        # raw_datasets = load_dataset(extension, data_files=data_files)
-    # See more about loading any type of standard or custom dataset at
-    # https://huggingface.co/docs/datasets/loading_datasets.html.
+ 
+    data_files = {}
+    if args.train_file is not None:
+        data_files["train"] = args.train_file
+    if args.validation_file is not None:
+        data_files["validation"] = args.validation_file
+    extension = args.train_file.split(".")[-1]
+    raw_datasets = load_dataset(extension, data_files=data_files)
+       
 
     # Labels
     def preprocessing(examples):
@@ -320,7 +299,7 @@ def main():
     #
     # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-    config = AutoConfig.from_pretrained(args.model_name_or_path, num_labels=num_labels, finetuning_task=args.task_name)
+    config = AutoConfig.from_pretrained(args.model_name_or_path, num_labels=num_labels)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, use_fast=not args.use_slow_tokenizer)
     model = AutoModelForSequenceClassification.from_pretrained(
         args.model_name_or_path,
@@ -354,7 +333,7 @@ def main():
         )
 
     train_dataset = processed_datasets["train"]
-    eval_dataset = processed_datasets["validation_matched" if args.task_name == "mnli" else "validation"]
+    eval_dataset = processed_datasets["validation"]
 
     # Log a few random samples from the training set:
     for index in random.sample(range(len(train_dataset)), 3):
@@ -428,18 +407,11 @@ def main():
     # We need to initialize the trackers we use, and also store our configuration.
     # We initialize the trackers only on main process because `accelerator.log`
     # only logs on main process and we don't want empty logs/runs on other processes.
-    if args.with_tracking:
-        if accelerator.is_main_process:
-            experiment_config = vars(args)
-            # TensorBoard cannot log Enums, need the raw value
-            experiment_config["lr_scheduler_type"] = experiment_config["lr_scheduler_type"].value
-            accelerator.init_trackers("glue_no_trainer", experiment_config)
+    
+    # if args.with_tracking:
 
-    # Get the metric function
-    # if args.task_name is not None:
-    #     metric = evaluate.load("glue", args.task_name)
-    # else:
-    #     metric = accuracy_score
+
+  
 
     # Train!
     total_batch_size = args.per_device_train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
@@ -577,16 +549,7 @@ def main():
         for i, label in enumerate(["0", "1"]):  
             print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
 
-        if args.with_tracking:
-            accelerator.log(
-                {
-                    "accuracy" if args.task_name is not None else "glue": eval_metric,
-                    "train_loss": total_loss.item() / len(train_dataloader),
-                    "epoch": epoch,
-                    "step": completed_steps,
-                },
-                step=completed_steps,
-            )
+        # if args.with_tracking
 
         if args.push_to_hub and epoch < args.num_train_epochs - 1:
             accelerator.wait_for_everyone()
