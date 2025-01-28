@@ -545,7 +545,7 @@ def main():
             )
 
             # Print precision, recall, and F1 score table
-            print(f"\n{split_name.capitalize()} Metrics for Epoch {epoch + 1}")
+            print(f"\n{split_name.capitalize()} Metrics for Epoch {epoch}")
             print(f"{'Label':<10}{'Support':<10}{'Precision':<10}{'Recall':<10}{'F1 Score':<10}")
             print("-" * 50)
             for i, label in enumerate(["0", "1"]):  # Adjust labels as per dataset
