@@ -491,66 +491,70 @@ def main():
             if completed_steps >= args.max_train_steps:
                 break
 
-        model.eval()
-        samples_seen = 0
+        def evaluate_dataloader(dataloader, split_name):
+            """Helper function to evaluate a dataloader and print metrics."""
+            model.eval()
+            samples_seen = 0
+            all_predictions = []
+            all_references = []
+            input_texts = []
 
-        all_predictions = []
-        all_references = []
-        input_texts = []
+            results_csv_file = os.path.join(results_dir, f"{split_name}_results_epoch_{epoch + 1}.csv")
+            if accelerator.is_main_process:
+                # Initialize the CSV file with a header row
+                with open(results_csv_file, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Sentence", "True_Label", "Prediction"])
 
-        results_csv_file = os.path.join(results_dir, f"results_epoch_{epoch + 1}.csv")
-        if accelerator.is_main_process:
-            # Initialize the CSV file with a header row
-            with open(results_csv_file, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["Sentence", "True_Label", "Prediction"])
-        
-        for step, batch in enumerate(eval_dataloader):
-            with torch.no_grad():
-                outputs = model(**batch)
-            predictions = outputs.logits.argmax(dim=-1)
-            predictions, references = accelerator.gather((predictions, batch["labels"]))
-            
-            input_sentences = accelerator.gather(batch["input_ids"])  # Gather tokenized inputs
-            input_texts.extend(tokenizer.batch_decode(input_sentences, skip_special_tokens=True))  # Decode text
-            
-            # If we are in a multiprocess environment, the last batch has duplicates
-            if accelerator.num_processes > 1:
-                if step == len(eval_dataloader) - 1:
-                    predictions = predictions[: len(eval_dataloader.dataset) - samples_seen]
-                    references = references[: len(eval_dataloader.dataset) - samples_seen]
-                else:
-                    samples_seen += references.shape[0]
-            
-            all_predictions.extend([_.item() for _ in predictions])
-            all_references.extend([_.item() for _ in references])
-            # metric.add_batch(
-            #     predictions=predictions,
-            #     references=references,
-            # )
+            for step, batch in enumerate(dataloader):
+                with torch.no_grad():
+                    outputs = model(**batch)
+                predictions = outputs.logits.argmax(dim=-1)
+                predictions, references = accelerator.gather((predictions, batch["labels"]))
 
-        # Write the results to the CSV file
-        if accelerator.is_main_process:
-            with open(results_csv_file, "a", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                for text, ref, pred in zip(input_texts, all_references, all_predictions):
-                    writer.writerow([text, ref, pred])
+                input_sentences = accelerator.gather(batch["input_ids"])  # Gather tokenized inputs
+                input_texts.extend(tokenizer.batch_decode(input_sentences, skip_special_tokens=True))  # Decode text
 
-        # eval_metric = metric.compute()
-        eval_metric = accuracy_score(all_references, all_predictions)
-        logger.info(f" Accuracy of epoch {epoch}: {eval_metric}")
+                # If we are in a multiprocess environment, the last batch has duplicates
+                if accelerator.num_processes > 1:
+                    if step == len(dataloader) - 1:
+                        predictions = predictions[: len(dataloader.dataset) - samples_seen]
+                        references = references[: len(dataloader.dataset) - samples_seen]
+                    else:
+                        samples_seen += references.shape[0]
 
-        precision, recall, f1, support = precision_recall_fscore_support(
-            all_references, 
-            all_predictions, 
-            average=None  # Metrics for each class separately
+                all_predictions.extend([_.item() for _ in predictions])
+                all_references.extend([_.item() for _ in references])
+
+            # Write the results to the CSV file
+            if accelerator.is_main_process:
+                with open(results_csv_file, "a", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    for text, ref, pred in zip(input_texts, all_references, all_predictions):
+                        writer.writerow([text, ref, pred])
+
+            # Calculate accuracy
+            eval_metric = accuracy_score(all_references, all_predictions)
+            logger.info(f"{split_name.capitalize()} Accuracy of epoch {epoch}: {eval_metric}")
+
+            # Calculate precision, recall, F1, and support for each label
+            precision, recall, f1, support = precision_recall_fscore_support(
+                all_references,
+                all_predictions,
+                average=None  # Metrics for each class separately
             )
 
-        print(f"{'Label':<10}{'Support':<10}{'Precision':<10}{'Recall':<10}{'F1 Score':<10}")
-        print("-" * 50)
-        for i, label in enumerate(["0", "1"]):  
-            print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
+            # Print precision, recall, and F1 score table
+            print(f"\n{split_name.capitalize()} Metrics for Epoch {epoch + 1}")
+            print(f"{'Label':<10}{'Support':<10}{'Precision':<10}{'Recall':<10}{'F1 Score':<10}")
+            print("-" * 50)
+            for i, label in enumerate(["0", "1"]):  # Adjust labels as per dataset
+                print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
 
+        # Evaluate both train and eval dataloaders
+        evaluate_dataloader(train_dataloader, "train")
+        evaluate_dataloader(eval_dataloader, "eval")
+        
         # if args.with_tracking
 
         if args.push_to_hub and epoch < args.num_train_epochs - 1:
