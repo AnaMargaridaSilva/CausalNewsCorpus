@@ -284,14 +284,16 @@ def main():
         sentences = []
         labels = []    
         for i, text in enumerate(examples["text"]):
-            
-            sentences.append(text)
-            if any(['<SIG0>' in _ for _ in eval(examples["causal_text_w_pairs"][i])]):
-                labels.append(1)
+            if len(eval(examples["causal_text_w_pairs"][i])) == 0:
+                continue
             else:
-                labels.append(0)
+                sentences.append(text)
+                if any(['<SIG0>' in _ for _ in eval(examples["causal_text_w_pairs"][i])]):
+                    labels.append(1)
+                else:
+                    labels.append(0)
         return {"sentences": sentences, "labels": labels}
-
+        
     raw_datasets = raw_datasets.map(preprocessing, batched=True, remove_columns=raw_datasets['train'].column_names)
 
     num_labels = 2
