@@ -44,6 +44,8 @@ import csv
 import pandas as pd
 import numpy as np
 
+from scipy.stats import mode
+
 logger = get_logger(__name__)
 # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/text-classification/requirements.txt")
 
@@ -297,13 +299,6 @@ def main():
 
     """
     # We need to initialize a new model for each seed - this part will be defined after
-    
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        ignore_mismatched_sizes=args.ignore_mismatched_sizes
-    )
     """
 
     padding = "max_length" if args.pad_to_max_length else False
@@ -403,7 +398,7 @@ def main():
           model, optimizer, train_dataloader, eval_dataloader, lr_scheduler
       )
 
-      """
+      
 
       # We need to recalculate our total training steps as the size of the training dataloader may have changed
       num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -419,9 +414,9 @@ def main():
               checkpointing_steps = int(args.checkpointing_steps)
       else:
           checkpointing_steps = None
-      """
+    
 
-      """
+      
       # Train!
       total_batch_size = args.per_device_train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
@@ -463,12 +458,9 @@ def main():
       results_dir = os.path.join(args.output_dir, "epoch_results")
       os.makedirs(results_dir, exist_ok=True)  # Ensure the directory exists
 
-      """
-
       
       logger.info(f"***** Training model with seed {seed} *****")
 
-      
       for epoch in range(starting_epoch, args.num_train_epochs):
         model.train()
         if args.with_tracking:
@@ -503,13 +495,7 @@ def main():
             if completed_steps >= args.max_train_steps:
                 break
 
-        model_save_path_seed = os.path.join(args.output_dir_ensemble, f"model_seed_{seed}.pth")
-        torch.save(model.state_dict(), model_save_path)
-        model_paths.append(model_save_path)
-        logger.info(f"Model with seed {seed} saved at {model_save_path}")
-
-    logger.info("All ensemble models trained and saved.")
-
+       
         def evaluate_dataloader(dataloader, split_name):
             """Helper function to evaluate a dataloader and print metrics."""
             model.eval()
@@ -570,11 +556,9 @@ def main():
             for i, label in enumerate(["0", "1"]):  # Adjust labels as per dataset
                 print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
 
-        # Evaluate both train and eval dataloaders
-        evaluate_dataloader(train_dataloader, "train")
+        # Evaluate 
+        # evaluate_dataloader(train_dataloader, "train")
         evaluate_dataloader(eval_dataloader, "eval")
-        
-        
 
         if args.push_to_hub and epoch < args.num_train_epochs - 1:
             accelerator.wait_for_everyone()
@@ -593,6 +577,75 @@ def main():
             if args.output_dir is not None:
                 output_dir = os.path.join(args.output_dir, output_dir)
             accelerator.save_state(output_dir)
+
+        model_save_path_seed = os.path.join(args.output_dir_ensemble, f"model_seed_{seed}.pth")
+        torch.save(model.state_dict(), model_save_path)
+        model_paths.append(model_save_path)
+        logger.info(f"Model with seed {seed} saved at {model_save_path}")
+
+    logger.info("All ensemble models trained and saved.")
+
+
+
+    def predict_ensemble(models, dataloader):
+        all_preds = []
+    
+        for model_path in models:
+            # Load model and set to evaluation mode
+            model = AutoModelForSequenceClassification.from_pretrained(args.model_name_or_path, config=config)
+            model.load_state_dict(torch.load(model_path))
+            model.eval()
+
+            preds_list = []
+            with torch.no_grad():
+                for batch in dataloader:
+                    outputs = model(**batch)
+                    # Get predicted class indices (not logits)
+                    preds_list.append(torch.argmax(outputs.logits, dim=1).cpu().numpy())
+
+            # Store predictions for each model
+            all_preds.append(np.concatenate(preds_list))
+
+        # Use majority voting to determine final predictions
+        # `mode` returns the most common value along axis=0 (i.e., across all models)
+        majority_preds, _ = mode(np.array(all_preds), axis=0)
+
+        # Return the final predictions from the majority vote
+        return majority_preds.flatten()
+
+    def evaluate_ensemble(models, dataloader, split_name, logger):
+        all_references = []
+        all_predictions = []
+
+        # Get the true labels and predictions from the ensemble
+        for batch in dataloader:
+            true_labels = batch['labels'].cpu().numpy()  # Assuming labels are in the 'labels' field
+            all_references.extend(true_labels)
+
+            # Get ensemble predictions for the batch
+            predictions = predict_ensemble(models, [batch])
+            all_predictions.extend(predictions)
+
+        # Calculate Accuracy
+        accuracy = accuracy_score(all_references, all_predictions)
+        logger.info(f"Ensemble Accuracy: {accuracy}")
+        
+        # Calculate precision, recall, F1, and support for each label
+        precision, recall, f1, support = precision_recall_fscore_support(
+            all_references,
+            all_predictions,
+            average=None  # Metrics for each class separately
+        )
+        
+        print(f"\nEnsemble Metrics")
+        print(f"{'Label':<10}{'Support':<10}{'Precision':<10}{'Recall':<10}{'F1 Score':<10}")
+        print("-" * 50)
+        for i, label in enumerate([0, 1]):  # Adjust labels based on your dataset
+            print(f"{label:<10}{support[i]:<10}{precision[i]:<10.4f}{recall[i]:<10.4f}{f1[i]:<10.4f}")
+
+    
+    evaluate_ensemble(models, eval_dataloader, "Eval", logger)
+
 
     if args.output_dir is not None:
         accelerator.wait_for_everyone()
