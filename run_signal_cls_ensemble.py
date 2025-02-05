@@ -577,11 +577,11 @@ def main():
                     if args.output_dir is not None:
                         output_dir = os.path.join(args.output_dir, output_dir)
                     accelerator.save_state(output_dir)
-
-        model_save_path_seed = os.path.join(args.output_dir_ensemble, f"model_seed_{seed}.pth")
-        torch.save(model.state_dict(), model_save_path_seed)
-        model_paths.append(model_save_path_seed)
-        logger.info(f"Model with seed {seed} saved at {model_save_path_seed}")
+                    
+          model_save_path_seed = os.path.join(args.output_dir_ensemble, f"model_seed_{seed}.pth")
+          torch.save(model.state_dict(), model_save_path_seed)
+          model_paths.append(model_save_path_seed)
+          logger.info(f"Model with seed {seed} saved at {model_save_path_seed}")
 
     logger.info("All ensemble models trained and saved.")
 
