@@ -351,6 +351,8 @@ def main():
 
     # Train an ensemble of models with different seed
     for seed in seeds:
+
+          torch.cuda.empty_cache()  # Free up GPU memory before initializing a new model
       
           set_seed(seed)
 
